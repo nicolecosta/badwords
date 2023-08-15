@@ -1,14 +1,15 @@
+# %%
 import pandas as pd
 from sklearn.svm import OneClassSVM
 from sklearn.preprocessing import LabelEncoder
 import tensorflow_hub as hub
 from tensorflow_text import SentencepieceTokenizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 import joblib
 from sklearn.metrics import accuracy_score
 
-embed = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual-large/3")
 
-df_leet = pd.read_csv('/home/ubuntu/Projects/Labs/badwords+names/app/dataset/leetdataset.csv', header=None, names=["0"])
+df_leet = pd.read_csv('/home/nicole.sarvasi/Projetos/badwords/app/dataset/leetdataset.csv', header=None, names=["0"])
 
 # Split the values in the single column by comma and explode into separate rows
 df_leet = df_leet["0"].str.split(",", expand=True).stack().reset_index(drop=True)
@@ -20,37 +21,33 @@ df_leet = pd.DataFrame(df_leet, columns=["words"])
 df_leet["class"] = "badword"
 
 # Read the Excel file into a DataFrame
-df_clean = pd.read_excel('/home/ubuntu/Projects/Labs/badwords+names/app/dataset/badwords+names.xlsx').dropna()
+df_clean = pd.read_excel('/home/nicole.sarvasi/Projetos/badwords/app/dataset/badwords+names.xlsx').dropna()
 
 df = pd.concat([df_clean, df_leet])
-
-# Define a function to apply the embedding model to each text instance
-def embed_text(text):
-    embeddings = embed([text])  # Apply the embedding model to a single text instance
-    return embeddings.numpy()[0]  # Return the embedding as a numpy array
-
-# Apply the embedding function to the 'text' column of the DataFrame
-df['embeddings'] = df['words'].apply(embed_text)
 
 # Encoding class labels
 label_encoder = LabelEncoder()
 df['class'] = label_encoder.fit_transform(df['class'])
 
+vectorizer = TfidfVectorizer()
+X = vectorizer.fit_transform(df['words'])
+
 # Creating the One-Class SVM model
 model = OneClassSVM()
 
 # Splitting the data into features (X) and class (y)
-X = df['embeddings'].to_list()
 y = df['class']
 
 # Training the model
 model.fit(X)
 
+# %%
+
 # Getting the decision function scores
 scores = model.decision_function(X)
 
 # Checking if scores are above a threshold (e.g., 0) to determine abnormal instances
-threshold = 0.0
+threshold = 300
 is_abnormal = scores < threshold
 
 # Adding the abnormality flag to the DataFrame
@@ -68,8 +65,15 @@ print("Accuracy:", accuracy)
 print(low_score_instances)
 
 # Save the model
-joblib.dump(model, '/home/ubuntu/Projects/Labs/badwords+names/badnames_model.joblib')
+joblib.dump(model, '/home/nicole.sarvasi/Projetos/badwords/app/badnames_model.joblib')
+loaded_model = joblib.load('/home/nicole.sarvasi/Projetos/badwords/app/badnames_model.joblib')
+# %%
+# Transform the new text using the same vectorizer
+new_text_vectorized = vectorizer.transform(['lazarento'])
 
+# Predict whether the new text is an outlier (1) or not (0)
+prediction = loaded_model.decision_function(new_text_vectorized)
+print(prediction)
 
 
 
